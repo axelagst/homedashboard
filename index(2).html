@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<style>
+  html, body { height: 100%; margin: 0; background: #000; color: #fff; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; overflow: hidden; }
+  .wrap { height: 100%; box-sizing: border-box; padding: 5vmin; display: flex; flex-direction: column; justify-content: center; }
+  .main { display: flex; flex-direction: column; }
+  .time { display: flex; align-items: baseline; line-height: 1; }
+  .hm { font-size: 26vmin; font-weight: 500; letter-spacing: -0.02em; }
+  .sec { font-size: 8vmin; color: #8a8a8a; margin-left: 2vmin; }
+  .date { display: flex; align-items: center; margin-top: 5vmin; }
+  .day { font-size: 13vmin; font-weight: 500; line-height: 1; padding: 1.5vmin 3.5vmin; border: 1px solid #3a3a3a; border-radius: 3vmin; }
+  .names { margin-left: 3.5vmin; }
+  .weekday { font-size: 5.5vmin; }
+  .month { font-size: 4vmin; color: #8a8a8a; margin-top: 0.8vmin; }
+  .weather { margin-top: 5vmin; padding: 3vmin 3.5vmin; border: 1px solid #3a3a3a; border-radius: 3vmin; }
+  .temp { font-size: 16vmin; font-weight: 500; line-height: 1; }
+  .desc { font-size: 4.5vmin; margin-top: 2vmin; }
+  .range { font-size: 3.6vmin; color: #8a8a8a; margin-top: 1vmin; }
+  .wave { position: relative; margin-top: 5vmin; height: 20vmin; border: 1px solid #3a3a3a; border-radius: 3vmin; overflow: hidden; }
+  .wave canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  .wavemsg { position: absolute; left: 0; right: 0; top: 50%; margin-top: -2.5vmin; text-align: center; font-size: 3.4vmin; color: #8a8a8a; }
+  .hint { position: fixed; left: 0; right: 0; bottom: 1.5vmin; text-align: center; font-size: 2.8vmin; color: #5a5a5a; }
+  @media (orientation: landscape) {
+    .main { flex-direction: row; align-items: center; }
+    .left { flex: 1.3; }
+    .weather { flex: 1; margin-top: 0; margin-left: 5vmin; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="main">
+    <div class="left">
+      <div class="time"><span class="hm" id="hm">--:--</span><span class="sec" id="sec">--</span></div>
+      <div class="date">
+        <div class="day" id="day">--</div>
+        <div class="names"><div class="weekday" id="weekday"></div><div class="month" id="month"></div></div>
+      </div>
+    </div>
+    <div class="weather">
+      <div class="temp" id="temp">--°</div>
+      <div class="desc" id="desc">Cargando clima…</div>
+      <div class="range" id="range"></div>
+    </div>
+  </div>
+  <div class="wave">
+    <canvas id="cv"></canvas>
+    <div class="wavemsg" id="wavemsg">Tocá la pantalla para activar el micrófono</div>
+  </div>
+</div>
+<div class="hint" id="hint">Tocá la pantalla para pantalla completa</div>
+<script>
+// Ubicación del clima: cambiá estos valores si hace falta
+var CIUDAD = "Corrientes";
+var LAT = -27.4692;
+var LON = -58.8306;
+
+/* ---------- Hora y fecha ---------- */
+var DIAS = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+var MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+function pad(n) { return n < 10 ? "0" + n : "" + n; }
+function tick() {
+  var d = new Date();
+  document.getElementById("hm").textContent = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  document.getElementById("sec").textContent = pad(d.getSeconds());
+  document.getElementById("day").textContent = d.getDate();
+  document.getElementById("weekday").textContent = DIAS[d.getDay()];
+  document.getElementById("month").textContent = MESES[d.getMonth()] + " " + d.getFullYear();
+}
+tick();
+setInterval(tick, 1000);
+
+/* ---------- Clima ---------- */
+var CLIMA = {
+  0: "Despejado", 1: "Mayormente despejado", 2: "Parcialmente nublado", 3: "Nublado",
+  45: "Niebla", 48: "Niebla", 51: "Llovizna", 53: "Llovizna", 55: "Llovizna",
+  56: "Llovizna helada", 57: "Llovizna helada", 61: "Lluvia leve", 63: "Lluvia", 65: "Lluvia fuerte",
+  66: "Lluvia helada", 67: "Lluvia helada", 71: "Nieve", 73: "Nieve", 75: "Nieve", 77: "Nieve",
+  80: "Chubascos", 81: "Chubascos", 82: "Chubascos fuertes", 85: "Nevadas", 86: "Nevadas",
+  95: "Tormenta", 96: "Tormenta con granizo", 99: "Tormenta con granizo"
+};
+var URL_CLIMA = "https://api.open-meteo.com/v1/forecast?latitude=" + LAT + "&longitude=" + LON +
+  "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1";
+
+function showWeather(j) {
+  var code = j.current.weather_code;
+  document.getElementById("temp").textContent = Math.round(j.current.temperature_2m) + "°";
+  document.getElementById("desc").textContent = CLIMA[code] || "Sin descripción";
+  document.getElementById("range").textContent = CIUDAD + " · mín " + Math.round(j.daily.temperature_2m_min[0]) +
+    "° · máx " + Math.round(j.daily.temperature_2m_max[0]) + "°";
+}
+function weatherFailed() {
+  document.getElementById("desc").textContent = "Sin datos del clima";
+  setTimeout(loadWeather, 60 * 1000);
+}
+function loadWeather() {
+  var x = new XMLHttpRequest();
+  x.open("GET", URL_CLIMA, true);
+  x.onreadystatechange = function () {
+    if (x.readyState !== 4) { return; }
+    if (x.status === 200) {
+      try { showWeather(JSON.parse(x.responseText)); } catch (e) { weatherFailed(); }
+    } else {
+      weatherFailed();
+    }
+  };
+  x.send();
+}
+loadWeather();
+setInterval(loadWeather, 15 * 60 * 1000);
+
+/* ---------- Ondas del micrófono ---------- */
+var BARRAS = 48;       // cantidad de barras
+var SENSIBILIDAD = 1.6; // subila si las barras se ven muy bajas
+
+var cv = document.getElementById("cv");
+var cctx = cv.getContext("2d");
+var analyser = null;
+var freq = null;
+var micStarted = false;
+
+function resizeCanvas() {
+  var r = window.devicePixelRatio || 1;
+  cv.width = Math.round(cv.clientWidth * r);
+  cv.height = Math.round(cv.clientHeight * r);
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+function draw() {
+  requestAnimationFrame(draw);
+  var w = cv.width, h = cv.height;
+  cctx.clearRect(0, 0, w, h);
+  var slot = w / BARRAS;
+  var bw = slot * 0.55;
+  var usable = analyser ? freq.length * 0.6 : 0;
+  if (analyser) { analyser.getByteFrequencyData(freq); }
+  cctx.fillStyle = analyser ? "#ffffff" : "#3a3a3a";
+  for (var i = 0; i < BARRAS; i++) {
+    var v = 0;
+    if (analyser) {
+      var idx = Math.floor(Math.pow(i / BARRAS, 1.7) * usable);
+      v = Math.min(1, (freq[idx] / 255) * SENSIBILIDAD);
+    }
+    var bh = Math.max(bw, v * h * 0.9);
+    cctx.fillRect(i * slot + (slot - bw) / 2, (h - bh) / 2, bw, bh);
+  }
+}
+draw();
+
+function micError() {
+  document.getElementById("wavemsg").textContent = "Micrófono no disponible. Revisá el permiso del navegador";
+  micStarted = false;
+}
+function micOk(stream) {
+  var AC = window.AudioContext || window.webkitAudioContext;
+  var ac = new AC();
+  if (ac.resume) { ac.resume(); }
+  var src = ac.createMediaStreamSource(stream);
+  analyser = ac.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.8;
+  freq = new Uint8Array(analyser.frequencyBinCount);
+  src.connect(analyser);
+  document.getElementById("wavemsg").style.display = "none";
+}
+function startMic() {
+  if (micStarted) { return; }
+  micStarted = true;
+  // Sin filtros: si no, el navegador "limpia" la música como si fuera eco o ruido
+  var cons = { audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } };
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia(cons).then(micOk, micError);
+  } else {
+    var g = navigator.getUserMedia || navigator.webkitGetUserMedia;
+    if (g) { g.call(navigator, cons, micOk, micError); } else { micError(); }
+  }
+}
+
+/* ---------- Pantalla completa y primer toque ---------- */
+function isFull() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+}
+function goFull() {
+  var el = document.documentElement;
+  var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (req) {
+    try {
+      var p = req.call(el);
+      if (p && p.catch) { p.catch(function () {}); }
+    } catch (e) {}
+  }
+}
+function updateHint() {
+  document.getElementById("hint").style.display = isFull() ? "none" : "block";
+  resizeCanvas();
+}
+document.body.addEventListener("click", function () {
+  goFull();
+  startMic();
+});
+document.addEventListener("fullscreenchange", updateHint);
+document.addEventListener("webkitfullscreenchange", updateHint);
+</script>
+</body>
+</html>
