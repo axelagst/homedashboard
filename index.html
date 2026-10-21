@@ -182,6 +182,22 @@ function startMic() {
   }
 }
 
+/* ---------- Mantener la pantalla encendida ---------- */
+var wakeLock = null;
+function keepAwake() {
+  if (wakeLock || !("wakeLock" in navigator)) { return; }
+  try {
+    navigator.wakeLock.request("screen").then(function (l) {
+      wakeLock = l;
+      l.addEventListener("release", function () { wakeLock = null; });
+    }, function () {});
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "visible") { keepAwake(); }
+});
+keepAwake();
+
 /* ---------- Pantalla completa y primer toque ---------- */
 function isFull() {
   return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
@@ -203,6 +219,7 @@ function updateHint() {
 document.body.addEventListener("click", function () {
   goFull();
   startMic();
+  keepAwake();
 });
 document.addEventListener("fullscreenchange", updateHint);
 document.addEventListener("webkitfullscreenchange", updateHint);
